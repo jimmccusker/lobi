@@ -179,15 +179,20 @@ WHERE { \
 
 function getData(measures, callback) {
     var sparqlQuery = 'PREFIX datacube: <http://logd.tw.rpi.edu/source/data-gov/datacube/>\
-PREFIX qb: <http://purl.org/linked-data/cube#>\
-PREFIX prov: <http://www.w3.org/ns/prov-o/>\
-PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\
+PREFIX qb: <http://purl.org/linked-data/cube#> \
+PREFIX prov: <http://www.w3.org/ns/prov-o/> \
+PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \
+PREFIX frbr: <http://purl.org/vocab/frbr/core#> \
 \
-select distinct ?datum ?loc ?value ?year WHERE {\
-    ?datum qb:measureType <{0}>;\
-           prov:location ?loc;\
-           prov:startedAt ?year;\
-           rdf:value ?value.\
+select distinct ?datum ?loc ?value ?year ?nextYear WHERE { \
+    ?datum qb:measureType <{0}>; \
+           prov:location ?loc; \
+           prov:startedAt ?year; \
+           rdf:value ?value. \
+    OPTIONAL { \
+        ?next frbr:successorOf ?datum; \
+                 prov:startedAt ?nextYear. \
+    } \
 }';
 
     measures.forEach(function(measure) {
@@ -201,7 +206,12 @@ select distinct ?datum ?loc ?value ?year WHERE {\
                 if (loc[measure.uri] == null) {
                     loc[measure.uri] = {};
                 }
-                loc[measure.uri][entry.year.value] = value;
+                var startYear = entry.year.value;
+                var nextYear = maxYear;
+                if (entry.nextYear != null && entry.nextYear.value != null)
+                    nextYear = entry.nextYear.value - 1;
+                for (var i=startYear; i <= nextYear; i++)
+                    loc[measure.uri][i] = value;
                 if (measure.data == null) {
                     measure.data = [];
                 }
@@ -234,8 +244,12 @@ function getYear() {
     return $('a#handle_year').attr("aria-valuetext");
 }
 
+var maxYear = -1;
+
 function makeSlider(years) {
     console.log(years);
+    maxYear = d3.max(years.map(function(d) {return parseInt(d.value);}));
+    console.log(maxYear);
     var yearSelect = d3.select("select#year");
     yearSelect.selectAll("option")
         .data(years)

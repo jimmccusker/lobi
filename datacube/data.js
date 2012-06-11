@@ -4,7 +4,12 @@ CHSI = 'http://logd.tw.rpi.edu/source/data-gov/dataset/2159/vocab/enhancement/1/
 DATACUBE = 'http://logd.tw.rpi.edu/source/data-gov/datacube/';
 RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 RO = 'http://www.obofoundry.org/ro/ro.owl#';
+SCALE = 'http://bmkeg.isi.edu/ooevv/edu.isi.bmkeg.ooevv.model.scale.';
 rdfs_label = RDFS+'label';
+
+Array.prototype.contains = function(obj) {
+    return this.indexOf(obj) > -1;
+};
 
 var attrModifiedWorks = false;
 var listener = function(){ attrModifiedWorks = true; };
@@ -143,12 +148,14 @@ PREFIX datacube: <http://logd.tw.rpi.edu/source/data-gov/datacube/> \
 PREFIX qb: <http://purl.org/linked-data/cube#> \
 construct { \
   ?measure ro:part_of <{0}>; \
-           rdfs:label ?label. \
+           rdfs:label ?label; \
+           a ?type. \
   <{0}> ro:has_part ?measure. \
 } where { \
   ?measure ro:part_of <{0}>; \
            a datacube:Measure; \
-           rdfs:label ?label. \
+           rdfs:label ?label; \
+           a ?type. \
   [ qb:measureType ?measure; \
     a datacube:SingularValue] \
 }";
@@ -368,15 +375,47 @@ function makePicker(categories) {
 
 }
 
+function sort_by(field, reverse, primer){
+   
+   function key(x) {
+       if (field == null) return primer ? primer(x) : x;
+       else return primer ? primer(x[field]) : x[field];
+   };
+
+   return function (a,b) {
+       var A = key(a), B = key(b);
+       return (A < B ? -1 : (A > B ? 1 : 0)) * [1,-1][+!!reverse];                  
+   }
+}
+
+function unique(x) {
+    var sorted = x.filter(function(d) {return d != null}).sort(sort_by(null,false,null));
+    console.log(sorted);
+    var result = [];
+    var last = null;
+    for (var i=0;i<sorted.length;i++) {
+        if (i == 0 || sorted[i] != last) {
+            result.push(sorted[i]);
+        }
+        last = sorted[i];
+    }
+    return result;
+}
+
 function makeScatterPlotMatrix(measures, year) {
     // Size parameters.
-    var size = 150,
-    padding = 20,
+    var size = 150.0,
+    padding = 20.0,
     n = measures.length;
     
+    var numericMeasures = graph.byClass(SCALE+'NumericScale');
+    //console.log(numericMeasures);
+
     locs = d3.values(getLocations(measures, year));
     // Position scales.
     var x = {}, y = {};
+    var measureVals = {};
+    var measureLocs = {};
     measures.forEach(function(measure) {
         var value = function(d) { 
             if (d[measure.uri] == null) {
@@ -388,8 +427,24 @@ function makeScatterPlotMatrix(measures, year) {
         range = [padding / 2, size - padding / 2];
         //console.log(domain);
         //console.log(range);
-        x[measure.uri] = d3.scale.linear().domain(domain).range(range);
-        y[measure.uri] = d3.scale.linear().domain(domain).range(range.slice().reverse());
+        if (numericMeasures.contains(measure)) {
+            x[measure.uri] = d3.scale.linear().domain(domain).range(range);
+            y[measure.uri] = d3.scale.linear().domain(domain).range(range.slice().reverse());
+        } else {
+            var measureVal = measureVals[measure.uri] = unique(locs.map(value));
+            y[measure.uri] = d3.scale.ordinal()
+                .domain(measureVal)
+                .range(range.slice().reverse());
+            x[measure.uri] = d3.scale.ordinal()
+                .domain(measureVal)
+                .range(range);
+            console.log(measureVal);
+            measureLocs[measure.uri] = measureVals[measure.uri].map(function(val) {
+                return locs.filter(function (loc) {
+                    return val == value(loc);
+                });
+            });
+        }
     });
     
     
@@ -418,11 +473,25 @@ function makeScatterPlotMatrix(measures, year) {
         .each(function(d,i) { 
             if (i < measures.length -1) {
                 // Axes.
-                var axis = d3.svg.axis()
-                    .ticks(5)
-                    .tickSize(size * (n-1-i));
-
-                d3.select(this).call(axis.scale(x[d.uri]).orient("bottom")); 
+                if (numericMeasures.contains(d)) {
+                    var axis = d3.svg.axis()
+                        .ticks(5)
+                        .tickSize(size * (n-1-i));
+                    d3.select(this).call(axis.scale(x[d.uri]).orient("bottom")); 
+                } else {
+                    var vals = measureVals[d.uri];
+                    var labels = d3.select(this).append("g").selectAll("text")
+                        .data(vals)
+                        .enter()
+                        .append("text")
+                        .text(String)
+                        .attr("text-anchor", "middle")
+                        .attr("y", (n-1-i)*size + padding/4)
+                        .attr("x",function(d,i) {
+                              var cellSize = (size-padding)/vals.length;
+                              return (padding/2 + (i+0.5) * cellSize);
+                        });
+                }
             }
         });
     
@@ -436,10 +505,25 @@ function makeScatterPlotMatrix(measures, year) {
         .each(function(d, i) {
             if (i > 0) {
                 // Axes.
-                var axis = d3.svg.axis()
-                    .ticks(5)
-                    .tickSize(size * (i));
-                d3.select(this).call(axis.scale(y[d.uri]).orient("right")); 
+                if (numericMeasures.contains(d)) {
+                    var axis = d3.svg.axis()
+                        .ticks(5)
+                        .tickSize(size * (i));
+                    d3.select(this).call(axis.scale(y[d.uri]).orient("right")); 
+                } else {
+                    var vals = measureVals[d.uri];
+                    var labels = d3.select(this).append("g").selectAll("text")
+                        .data(vals)
+                        .enter()
+                        .append("text")
+                        .text(String)
+                        .style('dominant-baseline',"middle")
+                        .attr("x", (i)*size)
+                        .attr("y",function(d,i) {
+                              var cellSize = (size-padding)/vals.length;
+                              return (padding/2 + (i+0.5) * cellSize);
+                        });
+                }
             }
         });
     
@@ -479,6 +563,13 @@ function makeScatterPlotMatrix(measures, year) {
     function plot(p) {
         var cell = d3.select(this);
         
+        
+        var filteredLocs = locs.filter(function(d,i) {
+            //if (i > 100) return false;
+            return d[p.x.uri] != null && d[p.y.uri] != null &&
+                d[p.x.uri][year] != null && d[p.y.uri][year] != null;
+        });
+        console.log(p);
         // Plot frame.
         cell.append("rect")
             .attr("class", "frame")
@@ -486,28 +577,140 @@ function makeScatterPlotMatrix(measures, year) {
             .attr("y", padding / 2)
             .attr("width", size - padding)
             .attr("height", size - padding);
+        if (numericMeasures.contains(p.y)) {
+            if (numericMeasures.contains(p.x)) {
+                console.log("Using scatter plot");
+                //console.log(filteredLocs.length);
+                // Plot dots.
+                cell.selectAll("circle")
+                    .data(filteredLocs)
+                    .enter().append("circle")
+                    .attr("class", function(d) { return d.uri; })
+                    .attr("cx", function(d) {
+                        return x[p.x.uri](d[p.x.uri][year]).toString(); 
+                    })
+                    .attr("cy", function(d) {
+                        return y[p.y.uri](d[p.y.uri][year]).toString(); 
+                    })
+                    .attr("r", 1.5);
         
-        var filteredLocs = locs.filter(function(d,i) {
-            //if (i > 100) return false;
-            return d[p.x.uri] != null && d[p.y.uri] != null &&
-                d[p.x.uri][year] != null && d[p.y.uri][year] != null;
-        });
-        //console.log(filteredLocs.length);
-        // Plot dots.
-        cell.selectAll("circle")
-            .data(filteredLocs)
-            .enter().append("circle")
-            .attr("class", function(d) { return d.uri; })
-            .attr("cx", function(d) {
-                return x[p.x.uri](d[p.x.uri][year]).toString(); 
-            })
-            .attr("cy", function(d) {
-                return y[p.y.uri](d[p.y.uri][year]).toString(); 
-            })
-            .attr("r", 1.5);
-        
-        // Plot brush.
-        cell.call(brush.x(x[p.x]).y(y[p.y]));
+                // Plot brush.
+                cell.call(brush.x(x[p.x]).y(y[p.y]));
+            } else {
+                var m = [0, 50, 20, 50], // top right bottom left
+                    xValues = measureVals[p.x.uri];
+                console.log(xValues);
+                var xLocations = measureLocs[p.x.uri].map(function(val) {
+                    return val.filter(function(d) {
+                        return filteredLocs.contains(d);
+                    })
+                });
+                console.log(measureLocs[p.x.uri]);
+                var yValues = xLocations.map(function(val) {
+                    return val.map(function (d) {
+                        return d[p.y.uri][year];
+                    });
+                });
+                var width = (size-padding)/xValues.length;
+                var chart = d3.chart.box()
+                    .whiskers(iqr(1.5))
+                    .tickFormat(null)
+                    .width(12)//(size-padding)/xValues.length - m[1] - m[3])
+                    .height((size-padding));
+                var yScale = y[p.y.uri];
+                chart.domain(y[p.y.uri].domain());
+                var boxes = cell.selectAll("g").data(yValues).enter().append("g")
+                    .attr("class","box")
+                    .attr("transform", function(d,i) {
+                          var cellSize = (size-padding)/xValues.length;
+                          return "translate(" + (padding/2 + (i+0.5) * cellSize - 6) + 
+                                            ","+padding/2+")";
+                    });
+                console.log(boxes);
+                boxes.call(function(d) {if (d != null && d.length > 0) chart(d)});
+
+            }
+        } else {
+            var yValues = measureVals[p.y.uri];
+            console.log(yValues);
+            if (numericMeasures.contains(p.x)) {
+                var yLocations = measureLocs[p.y.uri].map(function(val) {
+                    return val.filter(function(d) {
+                        return filteredLocs.contains(d);
+                    })
+                });
+                console.log(measureLocs[p.x.uri]);
+                var xValues = yLocations.map(function(val) {
+                    return val.map(function (d) {
+                        return d[p.x.uri][year];
+                    });
+                });
+                var width = (size-padding)/yValues.length;
+                var chart = d3.chart.box()
+                    .whiskers(iqr(1.5))
+                    .tickFormat(null)
+                    .width(12)//(size-padding)/xValues.length - m[1] - m[3])
+                    .height((size-padding));
+                var xScale = x[p.x.uri];
+                chart.domain(x[p.x.uri].domain());
+                var boxes = cell.append("g")
+                    .attr("transform", "rotate(90) translate(0,-"+size+")")
+                    .selectAll("g")
+                    .data(xValues).enter().append("g")
+                    .attr("class","box")
+                    .attr("transform", function(d,i) {
+                          var cellSize = (size-padding)/yValues.length;
+                          return "translate(" + (padding/2 + (i+0.5) * cellSize - 6) + 
+                                            ","+padding/2+")";
+                    });
+                console.log(boxes);
+                boxes.call(function(d) {if (d != null && d.length > 0) chart(d)});
+            } else {
+                var yValues = measureVals[p.y.uri];
+                console.log(yValues);
+                var xValues = measureVals[p.x.uri];
+                var counts = {};
+                xValues.forEach(function(x) {
+                    counts[x] = {};
+                    yValues.forEach(function(y) {
+                        counts[x][y] = 0;
+                    });
+                });
+                filteredLocs.forEach(function(loc) {
+                    counts[loc[p.x.uri][year]][loc[p.y.uri][year]] += 1;
+                });
+                var max = d3.max(d3.values(counts).map(function(d){
+                    return d3.max(d3.values(d));
+                }));
+                var color = d3.scale.linear()
+                    .domain([0, max])
+                    .range(["white", "red"]);
+                console.log(max);
+                var cells = cell.selectAll("g").data(cross(xValues,yValues))
+                    .enter()
+                    .append("g");
+                var xCellSize = (size-padding)/xValues.length;
+                var yCellSize = (size-padding)/yValues.length;
+                cells.append("rect")
+                    .attr("stroke","none")
+                    .attr("fill",function(d,i) {
+                          return color(counts[d.x][d.y]);
+                    })
+                    .attr("x",function(d) { return padding/2 + d.i*xCellSize })
+                    .attr("y",function(d) { return padding/2 + d.j*yCellSize })
+                    .attr("width",xCellSize)
+                    .attr("height",yCellSize);
+                cells.append("text")
+                    .style('dominant-baseline',"middle")
+                    .style('text-anchor',"middle")
+                    .style('font-size',12)
+                    .attr("x",function(d) { return padding/2 + (0.5+d.i)*xCellSize })
+                    .attr("y",function(d) { return padding/2 + (0.5+d.j)*yCellSize })
+                    .text(function(d) {
+                          return counts[d.x][d.y];
+                    })
+            }
+        }
     }
     
     // Clear the previously-active brush, if any.
@@ -540,4 +743,18 @@ function makeScatterPlotMatrix(measures, year) {
         for (i = -1; ++i < n;) for (j = -1; ++j < m;) c.push({x: a[i], i: i, y: b[j], j: j});
         return c;
     }   
+}
+
+// Returns a function to compute the interquartile range.
+function iqr(k) {
+  return function(d, i) {
+    var q1 = d.quartiles[0],
+        q3 = d.quartiles[2],
+        iqr = (q3 - q1) * k,
+        i = -1,
+        j = d.length;
+    while (d[++i] < q1 - iqr);
+    while (d[--j] > q3 + iqr);
+    return [i, j];
+  };
 }

@@ -1,3 +1,9 @@
+.box { font: 10px sans-serif; }
+.box line, .box rect, .box circle { stroke: #000; stroke-width: 1px; fill: #fff; }
+.box .center { stroke-dasharray: 3 3; }
+.box .outlier { stroke: #444;  fill: none; }
+
+
 #counties path {
   stroke: #fff;
   stroke-width: .25px;

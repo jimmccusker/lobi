@@ -156,7 +156,7 @@ d3.chart.box = function() {
 
       outlier.enter().insert("svg:circle", "text")
           .attr("class", "outlier")
-          .attr("r", 5)
+          .attr("r", 3)
           .attr("cx", width / 2)
           .attr("cy", function(i) { return x0(d[i]); })
           .style("opacity", 1e-6)
@@ -180,56 +180,56 @@ d3.chart.box = function() {
       var format = tickFormat || x1.tickFormat(8);
 
       // Update box ticks.
-      var boxTick = g.selectAll("text.box")
-          .data(quartileData);
+      //var boxTick = g.selectAll("text.box")
+      //    .data(quartileData);
 
-      boxTick.enter().append("svg:text")
-          .attr("class", "box")
-          .attr("dy", ".3em")
-          .attr("dx", function(d, i) { return i & 1 ? 6 : -6 })
-          .attr("x", function(d, i) { return i & 1 ? width : 0 })
-          .attr("y", x0)
-          .attr("text-anchor", function(d, i) { return i & 1 ? "start" : "end"; })
-          .text(format)
-        .transition()
-          .duration(duration)
-          .attr("y", x1);
+      //boxTick.enter().append("svg:text")
+      //    .attr("class", "box")
+      //    .attr("dy", ".3em")
+      //    .attr("dx", function(d, i) { return i & 1 ? 6 : -6 })
+      //    .attr("x", function(d, i) { return i & 1 ? width : 0 })
+      //    .attr("y", x0)
+      //    .attr("text-anchor", function(d, i) { return i & 1 ? "start" : "end"; })
+      //    .text(format)
+      //  .transition()
+      //    .duration(duration)
+      //    .attr("y", x1);
 
-      boxTick.transition()
-          .duration(duration)
-          .text(format)
-          .attr("y", x1);
+      //boxTick.transition()
+      //    .duration(duration)
+      //    .text(format)
+      //    .attr("y", x1);
 
       // Update whisker ticks. These are handled separately from the box
       // ticks because they may or may not exist, and we want don't want
       // to join box ticks pre-transition with whisker ticks post-.
-      var whiskerTick = g.selectAll("text.whisker")
-          .data(whiskerData || []);
+      //var whiskerTick = g.selectAll("text.whisker")
+      //    .data(whiskerData || []);
 
-      whiskerTick.enter().append("svg:text")
-          .attr("class", "whisker")
-          .attr("dy", ".3em")
-          .attr("dx", 6)
-          .attr("x", width)
-          .attr("y", x0)
-          .text(format)
-          .style("opacity", 1e-6)
-        .transition()
-          .duration(duration)
-          .attr("y", x1)
-          .style("opacity", 1);
+      //whiskerTick.enter().append("svg:text")
+      //    .attr("class", "whisker")
+      //    .attr("dy", ".3em")
+      //    .attr("dx", 6)
+      //    .attr("x", width)
+      //    .attr("y", x0)
+      //    .text(format)
+      //    .style("opacity", 1e-6)
+      //  .transition()
+      //    .duration(duration)
+      //    .attr("y", x1)
+      //    .style("opacity", 1);
 
-      whiskerTick.transition()
-          .duration(duration)
-          .text(format)
-          .attr("y", x1)
-          .style("opacity", 1);
+      //whiskerTick.transition()
+      //    .duration(duration)
+      //    .text(format)
+      //    .attr("y", x1)
+      //    .style("opacity", 1);
 
-      whiskerTick.exit().transition()
-          .duration(duration)
-          .attr("y", x1)
-          .style("opacity", 1e-6)
-          .remove();
+      //whiskerTick.exit().transition()
+      //    .duration(duration)
+      //    .attr("y", x1)
+      //    .style("opacity", 1e-6)
+      //    .remove();
     });
     d3.timer.flush();
   }
